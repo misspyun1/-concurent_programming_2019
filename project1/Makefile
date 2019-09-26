@@ -9,7 +9,7 @@ INC = ./include/
 LIB = ./lib/
 
 # Pre-Processor.
-CFLAGS += -I$(INC) -L$(LIB) -lpthread
+CFLAGS += -I$(INC) -L$(LIB) -lpthread -O3
 
 
 TARGET = run

@@ -68,6 +68,7 @@ void split ( int input_fd )
 	size_t file_size_half[2];
 	file_size_half[0]= file_size/2;
 	file_size_half[1] = file_size - file_size_half[0];
+    printf("FILE SIZE : %u %u\n",(unsigned int)file_size_half[0], (unsigned int)file_size_half[1]);
 
 	size_t  offset = 0;
 
@@ -221,14 +222,14 @@ void sort ( int output_fd )
                 memcpy(output_buffer+output_amount, buffer2+buffer2_idx, TUPLE_SIZE);
                 buffer2_idx += TUPLE_SIZE;
             }
-            if (ret < 0) {
-                printf("error: write temp file\n");
-                return;
-            }
             output_amount += TUPLE_SIZE;
         }
 
         ret = pwrite(output_fd, output_buffer, output_amount, output_offset);
+        if (ret < 0) {
+            printf("error: write temp file\n");
+            return;
+        }
         output_offset += ret;
 
     }

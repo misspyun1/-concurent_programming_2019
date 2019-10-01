@@ -68,8 +68,7 @@ void split ( int input_fd )
 	size_t file_size_half[2];
 	file_size_half[0]= file_size/2;
 	file_size_half[1] = file_size - file_size_half[0];
-    printf("FILE SIZE : %u %u\n",(unsigned int)file_size_half[0], (unsigned int)file_size_half[1]);
-
+    
 	size_t  offset = 0;
 
 	for(int i  = 0;i<2;i++) {
@@ -136,11 +135,6 @@ void sort ( int output_fd )
             return;
         }
     }
-    size_t temp_file_read_amount;
-    if(temp_file_size[0]<TUPLE_SIZE*4){
-        temp_file_read_amount = ((temp_file_size[0]/TUPLE_SIZE)/4 +1)*TUPLE_SIZE;
-    }
-    temp_file_read_amount =  ((temp_file_size[0]/TUPLE_SIZE)/4)*TUPLE_SIZE;
 
     flag1 = flag2 = 0 ;
     read_ret1 = pread(temp_fd[0], buffer1,temp_file_read_amount, temp_file_offset[0]);
@@ -152,9 +146,9 @@ void sort ( int output_fd )
     {
         if ( flag1 )
         {
+            // Make buffer1 empty to add new data
             buffer1_idx = 0;
             read_ret1 = pread(temp_fd[0], buffer1, MEM_SIZE/4, temp_file_offset[0]);
-            //printf("temp file1을 %u만큼 더 읽음\n",(unsigned int)read_ret1);
             if ( read_ret1 == 0 )
             {   /* If first file ends then the whole content of second
                     file is written in the respective target file */
@@ -162,7 +156,6 @@ void sort ( int output_fd )
                 output_offset += ret;
                 while (1){
                     read_ret2 = pread ( temp_fd[1], output_buffer, MEM_SIZE/2, temp_file_offset[1] );
-                    //printf("temp file1이 끝나서 temp file2 %u만큼 더 읽어요\n", (unsigned int)read_ret2);
                     if(read_ret2 == 0){
                         break;
                     }
@@ -180,7 +173,6 @@ void sort ( int output_fd )
             // Make buffer2 empty to add new data
             buffer2_idx = 0;
             read_ret2 = pread(temp_fd[1], buffer2, MEM_SIZE/4, temp_file_offset[1]);
-            //printf("temp file2을 %u만큼 더 읽음\n",(unsigned int)read_ret2);
             
             if ( read_ret2 == 0 )
             {   /* If first file ends then the whole content of second
@@ -189,8 +181,6 @@ void sort ( int output_fd )
                 output_offset += ret;
                 while (1){
                     read_ret1 = pread ( temp_fd[0], output_buffer, MEM_SIZE/2, temp_file_offset[0] );
-                    //printf("temp file2가 끝나서 temp file1 %u만큼 더 읽어요\n", (unsigned int)read_ret1);
-                    // printf("%s",output_buffer);
                     if(read_ret1 == 0){
                         break;
                     }

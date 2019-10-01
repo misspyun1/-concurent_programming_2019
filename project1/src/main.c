@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
 void split ( int input_fd )
 {
 	int temp_fd;
-	char *file_names[ ] ={"temp1.dat","temp2.dat"};
+	char *temp_file_names[ ] ={"temp1.dat","temp2.dat"};
 
 
 	size_t file_size = lseek(input_fd, 0, SEEK_END);
@@ -73,7 +73,7 @@ void split ( int input_fd )
 	size_t  offset = 0;
 
 	for(int i  = 0;i<2;i++) {
-		temp_fd = open(file_names[i], O_RDWR | O_CREAT | O_TRUNC, 0777);
+		temp_fd = open(temp_file_names[i], O_RDWR | O_CREAT | O_TRUNC, 0777);
 		if (temp_fd == -1) {
 			printf("error: open temp file\n");
 			return;
@@ -102,49 +102,116 @@ void split ( int input_fd )
 
 
 /* Sorts the file */
-void sort ( int output_fd)
+void sort ( int output_fd )
 {
-	int temp_fd[2];
-	char *file_names[ ] ={"temp1.dat","temp2.dat"};
+    int temp_fd[2] ; // file descriptor of temp files
+    size_t temp_file_offset[2] = {0,0};
+    size_t output_offset = 0;
+    char *temp_file_names[ ] =
+            {
+                    "temp1.dat",
+                    "temp2.dat",
+            } ;
 
-	size_t  offset[2] = {0,0};
-	size_t output_offset = 0;
-	for(int i  = 0;i<2;i++) {
-		temp_fd[i] = open(file_names[i], O_RDONLY);
-		if (temp_fd[i] == -1) {
-			printf("error: open temp file\n");
+    size_t ret;
+
+    char *buffer1;
+	buffer1 = (char *) malloc(sizeof(char) * 100);    
+    char *buffer2;
+	buffer2 = (char *) malloc(sizeof(char) * 100);
+
+    int  flag1, flag2;
+
+    for (int i = 0 ; i <= 1 ; i++ ){
+        temp_fd[i] = open(temp_file_names[i], O_RDWR, 0777);
+        if (temp_fd[i] == -1) {
+            printf("error: open temp file\n");
+            return;
+        }
+
+        size_t file_size = lseek(temp_fd[i], 0, SEEK_END);
+        if ( file_size == 0 ){
+            printf("error : temp file empty\n");
+            return;
+        }
+    }
+
+    flag1 = flag2 = 1 ;
+
+    while ( 1 )
+    {
+        if ( flag1 )
+        {
+            size_t read_ret = pread(temp_fd[0], buffer1, TUPLE_SIZE, temp_file_offset[0]);
+            if ( read_ret == 0 )
+            {   /* If first file ends then the whole content of second
+                    file is written in the respective target file */
+                ret = pwrite(output_fd, buffer2, TUPLE_SIZE, output_offset);
+                output_offset += ret;
+                while (1){
+                    read_ret = pread ( temp_fd[1], buffer2, TUPLE_SIZE, temp_file_offset[1] );
+                    if(read_ret == 0){
+                        break;
+                    }
+                    ret = pwrite(output_fd, buffer2, TUPLE_SIZE, output_offset);
+                    output_offset += ret;
+                    temp_file_offset[1] += read_ret;
+                }
+                break ;
+            }
+            temp_file_offset[0] += read_ret;
+        }
+
+        if ( flag2 )
+        {
+            size_t read_ret = pread(temp_fd[1], buffer2, TUPLE_SIZE, temp_file_offset[1]);
+            if ( read_ret == 0 )
+            {   /* If first file ends then the whole content of second
+                    file is written in the respective target file */
+                ret = pwrite(output_fd, buffer1, TUPLE_SIZE, output_offset);
+                output_offset += ret;
+                while (1){
+                    read_ret = pread ( temp_fd[0], buffer1, TUPLE_SIZE, temp_file_offset[0] );
+                    if(read_ret == 0){
+                        break;
+                    }
+                    ret = pwrite(output_fd, buffer1, TUPLE_SIZE, output_offset);
+                    output_offset += ret;
+                    temp_file_offset[0] += read_ret;
+                }
+                break ;
+            }
+            temp_file_offset[1] += read_ret;
+        }
+
+        int cmp = compare(buffer1, buffer2);
+        //printf("%s%s -->%d\n", buffer1, buffer2, cmp);
+        if ( cmp < 0)
+        {
+            flag2 = 0 ;
+            flag1 = 1 ; 
+            ret = pwrite(output_fd, buffer1, TUPLE_SIZE, output_offset);
+        }
+        else
+        {
+            flag1 = 0 ;
+            flag2 = 1 ;
+            ret = pwrite(output_fd, buffer2, TUPLE_SIZE, output_offset);
+        }
+        if (ret < 0) {
+			printf("error: write temp file\n");
 			return;
 		}
-	}
-	size_t file_size = lseek(temp_fd[0], 0, SEEK_END);
-	size_t file_size_half[2];
-	file_size_half[0]= (file_size /TUPLE_SIZE)/2 * TUPLE_SIZE;
-	file_size_half[1] = file_size - file_size_half[0];
+        output_offset += ret;
 
-	for(int i = 0;i<2;i++) {
-		char *buffer;
-		buffer = (char *) malloc(sizeof(char) * MEM_SIZE);
+    }
+    
+    // free buffer.
+	free(buffer1);
+	free(buffer2);
 
-		size_t buffer_offset = 0;
-
-		for (int tmp_file_num = 0; tmp_file_num < 2; tmp_file_num++) {
-			size_t ret = pread(temp_fd[tmp_file_num], buffer + buffer_offset, file_size_half[i], offset[tmp_file_num]);
-			if (ret < 0) {
-				printf("error: read temp file\n");
-			}
-			offset[tmp_file_num] = offset[tmp_file_num] + ret;
-			buffer_offset = buffer_offset + ret;
-		}
-
-		// sort.
-		qsort(buffer, file_size_half[i] / TUPLE_SIZE, TUPLE_SIZE, compare);
-		size_t ret = pwrite(output_fd, buffer, 2*file_size_half[i], output_offset);
-		output_offset = output_offset + ret;
-		if (ret < 0) {
-			printf("error: write output file\n");
-		}
-		free(buffer);
-	}
+	close(temp_fd[0]);
+	close(temp_fd[1]);
 
 }
 

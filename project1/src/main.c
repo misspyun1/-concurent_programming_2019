@@ -12,15 +12,14 @@
 #define TUPLE_SIZE	(100)
 #define KEY_SIZE	(10)
 
-void split (int ) ;
-void sort ( int) ;
-
 const unsigned int MEM_SIZE = 2e9;
+
+void split (int);
+void sort (int);
 
 int compare(const void* p1, const void* p2) {
 	return memcmp(p1, p2, KEY_SIZE);
 }
-
 
 int main(int argc, char* argv[]) {
 
@@ -153,7 +152,7 @@ void sort ( int output_fd )
         if ( flag1 )
         {
             buffer1_idx = 0;
-            read_ret1 = pread(temp_fd[0], buffer1, temp_file_read_amount, temp_file_offset[0]);
+            read_ret1 = pread(temp_fd[0], buffer1, MEM_SIZE/4, temp_file_offset[0]);
             //printf("temp file1을 %u만큼 더 읽음\n",(unsigned int)read_ret1);
             if ( read_ret1 == 0 )
             {   /* If first file ends then the whole content of second
@@ -177,8 +176,9 @@ void sort ( int output_fd )
 
         if ( flag2 )
         {
+            // Make buffer2 empty to add new data
             buffer2_idx = 0;
-            read_ret2 = pread(temp_fd[1], buffer2,temp_file_read_amount, temp_file_offset[1]);
+            read_ret2 = pread(temp_fd[1], buffer2, MEM_SIZE/4, temp_file_offset[1]);
             //printf("temp file2을 %u만큼 더 읽음\n",(unsigned int)read_ret2);
             
             if ( read_ret2 == 0 )

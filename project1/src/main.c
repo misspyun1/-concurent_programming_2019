@@ -123,7 +123,7 @@ void sort ( int output_fd )
     size_t read_ret1, read_ret2;
 
     for (int i = 0 ; i <2 ; i++ ){
-        temp_fd[i] = open(temp_file_names[i], O_RDWR, 0777);
+        temp_fd[i] = open(temp_file_names[i], O_RDONLY);
         if (temp_fd[i] == -1) {
             printf("error: open temp file\n");
             return;
@@ -137,7 +137,7 @@ void sort ( int output_fd )
     }
 
     flag1 = flag2 = 0 ;
-    read_ret1 = pread(temp_fd[0], buffer1,MEM_SIZE/4, temp_file_offset[0]);
+    read_ret1 = pread(temp_fd[0], buffer1, MEM_SIZE/4, temp_file_offset[0]);
     read_ret2 = pread(temp_fd[1], buffer2, MEM_SIZE/4, temp_file_offset[1]);
     temp_file_offset[0] += read_ret1;
     temp_file_offset[1] += read_ret2;
@@ -194,7 +194,7 @@ void sort ( int output_fd )
         }
         
         size_t output_amount = 0;
-        while(buffer1_idx < read_ret1 && buffer2_idx < read_ret2){
+        while(buffer1_idx < read_ret1 && buffer2_idx < read_ret2&&output_amount<MEM_SIZE/2){
             int cmp = compare(buffer1+buffer1_idx, buffer2+buffer2_idx);
             // printf("(%d, %d) / (%u, %u): \n",buffer1_idx, buffer2_idx,(unsigned int) read_ret1, (unsigned int)read_ret2);
             // printf("1\n%s2\n%s -->%d\n", buffer1+buffer1_idx, buffer2+buffer2_idx, cmp);

@@ -84,8 +84,8 @@ void split ( int input_fd )
 		offset = offset + ret;
 
 		// sort.
-		qsort(buffer, file_size_half[i] / TUPLE_SIZE, TUPLE_SIZE, compare);
-		ret = pwrite(temp_fd, buffer, file_size_half[i], 0);
+		qsort(buffer, (file_size/2) / TUPLE_SIZE, TUPLE_SIZE, compare);
+		ret = pwrite(temp_fd, buffer, file_size/2, 0);
 		if (ret < 0) {
 			printf("error: write temp file\n");
 			return;

@@ -147,7 +147,7 @@ void sort ( int output_fd )
     {
         if ( flag1 )
         {
-            // Make buffer1 empty to add new data
+            /* Make buffer1 empty to add new data */
             buffer1_idx = 0;
             read_ret1 = pread(temp_fd[0], buffer1, MEM_SIZE_HALF/2, temp_file_offset[0]);
             if ( read_ret1 == 0 )
@@ -156,6 +156,7 @@ void sort ( int output_fd )
                 ret = pwrite(output_fd, buffer2+buffer2_idx, read_ret2-buffer2_idx, output_offset);
                 output_offset += ret;
                 while (1){
+                    /* Read temp2.dat to end, and write it to output_buffer*/
                     read_ret2 = pread ( temp_fd[1], output_buffer, MEM_SIZE_HALF, temp_file_offset[1] );
                     if(read_ret2 == 0){
                         break;
@@ -171,7 +172,7 @@ void sort ( int output_fd )
 
         if ( flag2 )
         {
-            // Make buffer2 empty to add new data
+            /*Make buffer2 empty to add new data*/
             buffer2_idx = 0;
             read_ret2 = pread(temp_fd[1], buffer2, MEM_SIZE_HALF/2, temp_file_offset[1]);
             
@@ -181,6 +182,7 @@ void sort ( int output_fd )
                 ret = pwrite(output_fd, buffer1 + buffer1_idx, read_ret1-buffer1_idx, output_offset);
                 output_offset += ret;
                 while (1){
+                    /* Read temp1.dat to end, and write it to output_buffer*/
                     read_ret1 = pread ( temp_fd[0], output_buffer, MEM_SIZE_HALF, temp_file_offset[0] );
                     if(read_ret1 == 0){
                         break;
@@ -197,8 +199,8 @@ void sort ( int output_fd )
         size_t output_amount = 0;
         while(buffer1_idx < read_ret1 && buffer2_idx < read_ret2&&output_amount<MEM_SIZE_HALF){
             int cmp = compare(buffer1+buffer1_idx, buffer2+buffer2_idx);
-            // printf("(%d, %d) / (%u, %u): \n",buffer1_idx, buffer2_idx,(unsigned int) read_ret1, (unsigned int)read_ret2);
-            // printf("1\n%s2\n%s -->%d\n", buffer1+buffer1_idx, buffer2+buffer2_idx, cmp);
+            /* If cmp <0, it means buffer1 <buffer2 so copy buffer1 to output_buffer as much as TUPLE_SIZE
+                if not, copy buffer2 to output_buffer */
             if ( cmp < 0)
             {
                 flag2 = 0 ;

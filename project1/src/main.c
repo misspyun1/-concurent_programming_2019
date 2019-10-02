@@ -137,8 +137,8 @@ void sort ( int output_fd )
     }
 
     flag1 = flag2 = 0 ;
-    read_ret1 = pread(temp_fd[0], buffer1,temp_file_read_amount, temp_file_offset[0]);
-    read_ret2 = pread(temp_fd[1], buffer2, temp_file_read_amount, temp_file_offset[1]);
+    read_ret1 = pread(temp_fd[0], buffer1,MEM_SIZE/4, temp_file_offset[0]);
+    read_ret2 = pread(temp_fd[1], buffer2, MEM_SIZE/4, temp_file_offset[1]);
     temp_file_offset[0] += read_ret1;
     temp_file_offset[1] += read_ret2;
 

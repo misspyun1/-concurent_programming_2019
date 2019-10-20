@@ -5,17 +5,13 @@
 #include <stdlib.h>
 #include <time.h>
 #include <deque>
+#include <unordered_set>
 #include <vector>
 using namespace std;
 
 typedef struct Record{
     long val;
 
-    /* pair<lock_type, thread id>
-     * lock_type 0 : reader lock
-     * lock_type 1 : writer lock 
-     */
-    deque<pair<int, int> > lock_table;
     int read_active;
     int write_active;
     pthread_mutex_t mutex;
@@ -23,5 +19,13 @@ typedef struct Record{
     pthread_cond_t write_cv;
 }record;
 
-int ReadLock(int num, int tid, record* records);
-int ReadUnlock(int num, int tid, record* records);
+/* num : Records Number (1 <= num <= R)
+ * tid : Threads Id (1 <= tid <= N)
+ * lock_table : locktable for [num]th Record
+ */
+int ReadLock(int num, int tid, record* records, vector<deque<pair<int, int> > > & , vector<unordered_set<int> >& worker_chk);
+int ReadUnlock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk);
+int WriteLock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk);
+int WriteUnlock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk);
+
+bool DetectCycle(int num, int tid, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> > worker_chk);

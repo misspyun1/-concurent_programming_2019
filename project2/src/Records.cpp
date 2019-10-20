@@ -5,11 +5,17 @@
 #include <stdlib.h>
 #include <time.h>
 #include <deque>
+#include <queue>
 #include <vector>
+#include <unordered_set>
 #include "Records.h"
 using namespace std;
 
-int ReadLock(int num, int tid, record* records){
+/* num : Records Number (1 <= num <= R)
+ * tid : Threads Id (1 <= tid <= N)
+ * lock_table : locktable for [num]th Record
+ */
+int ReadLock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk){
     int status = 0;
     status = pthread_mutex_lock(&records[num].mutex);
     while(records[num].write_active){
@@ -20,16 +26,17 @@ int ReadLock(int num, int tid, record* records){
     }
 
     // Add tid to lock table
-    records[num].lock_table.push_back(make_pair(0, tid));
+    lock_table[num].push_back(make_pair(0, tid));
 
     if(status==0){
         records[num].read_active ++;
     }
+    worker_chk[tid].insert(num);
     pthread_mutex_unlock(&records[num].mutex);
     return status;
 }
 
-int ReadUnlock(int num, int tid, record* records){
+int ReadUnlock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk){
     int status = 0;
     status = pthread_mutex_lock(&records[num].mutex);
     if(status){
@@ -38,28 +45,29 @@ int ReadUnlock(int num, int tid, record* records){
     records[num].read_active --;
 
     // Mark [num]th lock on lock table as unlocked
-    for(unsigned int i = 0;i<records[num].lock_table.size();i++){
-        if(records[num].lock_table[i].second==tid){
-            records[num].lock_table[i].second = -1;
+    for(unsigned int i = 0;i<lock_table[num].size();i++){
+        if(lock_table[num][i].second==tid){
+            lock_table[num][i].second = -1;
             break;
         }
     }
 
     // Pop deactivated locks.
-    while(records[num].lock_table.size()>0 && records[num].lock_table[0].second==-1){
-        records[num].lock_table.pop_front();
+    while(lock_table[num].size()>0 && lock_table[num][0].second==-1){
+        lock_table[num].pop_front();
     }
 
     // Send signal to write lock
     if(records[num].read_active == 0 && records[num].write_active>0){
         status  = pthread_cond_signal(&records[num].write_cv);
     }
+    worker_chk[tid].erase(num);
     pthread_mutex_unlock(&records[num].mutex);
 
     return status;
 }
 
-int WriteLock(int num, int tid, record* records){
+int WriteLock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk){
     int status = 0;
     status = pthread_mutex_lock(&records[num].mutex);
     while(records[num].write_active || records[num].read_active){
@@ -69,16 +77,17 @@ int WriteLock(int num, int tid, record* records){
         }
     }
 
-    records[num].lock_table.push_back(make_pair(1, tid));
+    lock_table[num].push_back(make_pair(1, tid));
 
     if(status==0){
         records[num].write_active = 1;
     }
+    worker_chk[tid].insert(num);
     pthread_mutex_unlock(&records[num].mutex);
     return status;  
 }
 
-int WriteUnlock(int num, int tid, record* records){
+int WriteUnlock(int num, int tid, record* records, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> >& worker_chk){
     int status = 0;
     status = pthread_mutex_lock(&records[num].mutex);
     if(status){
@@ -87,16 +96,16 @@ int WriteUnlock(int num, int tid, record* records){
     records[num].write_active = 0;
 
     // Mark [num]th lock on lock table as unlocked
-    for(unsigned int i = 0;i<records[num].lock_table.size();i++){
-        if(records[num].lock_table[i].second==tid){
-            records[num].lock_table[i].second = -1;
+    for(unsigned int i = 0;i<lock_table[num].size();i++){
+        if(lock_table[num][i].second==tid){
+            lock_table[num][i].second = -1;
             break;
         }
     }
 
     // Pop deactivated locks.
-    while(records[num].lock_table.size()>0 && records[num].lock_table[0].second==-1){
-        records[num].lock_table.pop_front();
+    while(lock_table[num].size()>0 && lock_table[num][0].second==-1){
+        lock_table[num].pop_front();
     }
     
     // Broadcast to read lock
@@ -116,11 +125,50 @@ int WriteUnlock(int num, int tid, record* records){
             return status;
         }
     }
+    worker_chk[tid].erase(num);
     pthread_mutex_unlock(&records[num].mutex);
 
     return status;
 }
 
-bool DetectCycle(){
+/* num : Records Number (1 <= num <= R)
+ * tid : Threads Id (1 <= tid <= N)
+ * lock_table : locktable for [num]th Record
+ */
+bool DetectCycle(int num, int tid, vector<deque<pair<int, int> > > & lock_table, vector<unordered_set<int> > worker_chk){
+    // 나를 부모로 갖고 있는 부모가 있ㄴ느지 보기
+    queue<int>q;
+    for(unsigned int i = 0; i < lock_table[num].size();i++){
+        if(lock_table[num][i].second != -1){
+            q.push(lock_table[num][i].second);
+            worker_chk[lock_table[num][i].second].erase(num);
+        }
+    }
+    printf("Start to Detect Cycle Record %d at Thread %d : %lu\n", num, tid, q.size());
+    while(!q.empty()){
+        // now : Thread ID
+        int now = q.front();
+        q.pop();
+        if(now==tid){
+            return true;
+        }
+
+        for(int ijk : worker_chk[now]){
+            // ijk : rest of numbers [now]th thread has
+            printf("Record %d at Thread %d size -> %lu\n",ijk, now, lock_table[ijk].size());
+            for(unsigned int i = 0; i< lock_table[ijk].size();i++){
+                printf("Parent of Record %d at Thread %d : %d\n",ijk, now, lock_table[ijk][i].second);
+                if(lock_table[ijk][i].second == now){
+                    break;
+                }
+                if(lock_table[ijk][i].second == -1){
+                    continue;
+                }
+                q.push(lock_table[ijk][i].second);
+            }
+        }
+        worker_chk[now].clear();
+
+    }
     return false;
 }

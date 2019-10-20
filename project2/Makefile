@@ -1,6 +1,6 @@
 # Compiler and Compile options.
-CC = g++
-CFLAGS = -Wall -g -O2
+CXX = g++
+CXXFLAGS = -Wall -g -O2 -std=c++11
 
 # Macros specifying path for compile.
 SRCS := $(wildcard src/*.cpp)
@@ -18,7 +18,7 @@ TARGET = run
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $(TARGET) $(OBJS) $(CFLAGS)
+	$(CXX) -o $(TARGET) $(OBJS) $(CFLAGS)
 
 
 

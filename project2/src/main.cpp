@@ -6,21 +6,17 @@
 #include <time.h>
 #include <deque>
 #include <vector>
+#include "Records.h"
 using namespace std;
 
+
 int N, R, E;
-int* records;
-pthread_mutex_t* record_lock;
-vector<deque<int> > lock_wait;
-int commit_id;
-
-bool DetectCycle(){
-
-}
+volatile int commit_id = 1;
+record* records;
 
 void* ThreadFunc(void* arg){
     long tid = (long)arg+1;
-    char log_file_name[15];
+    char log_file_name[20];
     sprintf(log_file_name, "thread%ld.txt", tid);
     FILE* log_file = fopen(log_file_name, "w");
     while(commit_id < E){
@@ -33,19 +29,32 @@ void* ThreadFunc(void* arg){
             k = rand()%R;
         }
 
-        pthread_mutex_lock(&record_lock[i]);
-        commit_id ++;
-        int present_commit = commit_id;
-        int t = records[i];
-        pthread_mutex_lock(&record_lock[j]);
-        records[j] += (t+1);
-        pthread_mutex_lock(&record_lock[k]);
-        records[k] -= t;
+   
+        // read lock i
+        long t = records[i].val;
+        // writer lock j
+        // chk cycle
+        if(DetectCycle()){
+            // unlock i
+        }
+        records[j].val += (t+1);
+        // writer lock k
+        // chk cycle
+        if(DetectCycle()){
+            // rollback j
+            // unlock j
+            // unlock i
+        }
+        records[k].val -= t;
         // Commit log
-        fprintf(log_file, "%d %d %d %d %d %d %d\n", present_commit, i,j,k,records[i], records[j], records[k] );
-        pthread_mutex_unlock(&record_lock[k]);
-        pthread_mutex_unlock(&record_lock[j]);
-        pthread_mutex_unlock(&record_lock[i]);
+        int present_commit = __sync_fetch_and_add(&commit_id, 1);
+        if(present_commit>=E){
+            break;
+        }
+        fprintf(log_file, "%d %d %d %d %ld %ld %ld\n", present_commit, i,j,k,records[i].val, records[j].val, records[k].val );
+        // unlock writer k
+        // unlock writer j
+        // unlock writer i
 
 
     }
@@ -69,11 +78,15 @@ int main(int argc, char* argv[]){
     
     pthread_t* threads;
     threads = (pthread_t *)malloc(sizeof(pthread_t) * N);
-    records = (int *)malloc(sizeof(int)*R);
-    record_lock = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*R);
-    // Initialize records as 100.
+    records = (record *)malloc(sizeof(record)*R);
+
+    // Initialize records
     for(int i = 0;i<R;i++){
-        records[i] = 100;
+        records[i].val = 100;
+        records[i].read_active = 0;
+        records[i].write_active = 0;
+        records[i].read_cv = PTHREAD_COND_INITIALIZER;
+        records[i].write_cv = PTHREAD_COND_INITIALIZER;
     }
 
     // Create threads to work.

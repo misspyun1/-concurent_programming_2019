@@ -13,6 +13,7 @@ using namespace std;
 int N, R, E;
 int commit_id = 1;
 record* records;
+pthread_mutex_t lock_table_mutex;
 
 /* pair<lock_type, thread id>
     * lock_type 0 : reader lock
@@ -27,7 +28,6 @@ void* ThreadFunc(void* arg){
     sprintf(log_file_name, "thread%ld.txt", tid);
     FILE* log_file = fopen(log_file_name, "w");
     while(commit_id <= E){
-        printf("Thread %ld, commit_id : %d\n",tid, commit_id);
         int i = (rand()%R + 1);
         int j = i, k = i;
         while(j==i){
@@ -36,31 +36,32 @@ void* ThreadFunc(void* arg){
         while(k==j || k==i){
             k = (rand()%R + 1);
         }
+        printf("Thread %ld, i : %d j : %d k : %d\n",tid, i, j, k);
    
         // Acquire read lock for records[i].
-        ReadLock(i, tid, records, lock_table, worker_chk);
+        ReadLock(i, tid, records, lock_table, worker_chk, lock_table_mutex);
         long t = records[i].val;        
         
         // Chk cycle before acquire lock for records[j]
-        if(DetectCycle(j, tid, lock_table, worker_chk)){
+        if(DetectCycle(j, tid, lock_table, worker_chk, lock_table_mutex)){
             printf("Detect Cycle before j%ld : %d %d %d\n",tid, i, j, k);
-            ReadUnlock(i, tid, records, lock_table, worker_chk);
+            ReadUnlock(i, tid, records, lock_table, worker_chk, lock_table_mutex);
             continue;
         }
         // Acquire write lock for records[j].
-        WriteLock(j, tid, records, lock_table, worker_chk);
+        WriteLock(j, tid, records, lock_table, worker_chk, lock_table_mutex);
         records[j].val += (t+1);
 
         // Chk cycle before acquire lock for records[k]
-        if(DetectCycle(k, tid, lock_table, worker_chk)){
+        if(DetectCycle(k, tid, lock_table, worker_chk, lock_table_mutex)){
             printf("Detect Cycle before k %ld : %d %d %d\n",tid, i, j, k);
             records[j].val -= (t+1);
-            WriteUnlock(j, tid, records, lock_table, worker_chk);
-            ReadUnlock(i, tid, records, lock_table, worker_chk);
+            WriteUnlock(j, tid, records, lock_table, worker_chk, lock_table_mutex);
+            ReadUnlock(i, tid, records, lock_table, worker_chk, lock_table_mutex);
             continue;
         }
         // Acquire write lock for records[k].
-        WriteLock(k, tid, records, lock_table, worker_chk);
+        WriteLock(k, tid, records, lock_table, worker_chk, lock_table_mutex);
         records[k].val -= t;
 
         // Commit log
@@ -68,23 +69,20 @@ void* ThreadFunc(void* arg){
         if(present_commit>E){
             records[k].val += t;
             records[j].val -= (t+1);
-            WriteUnlock(k, tid, records, lock_table, worker_chk);
-            WriteUnlock(j, tid, records, lock_table, worker_chk);
-            ReadUnlock(i, tid, records, lock_table, worker_chk);
+            WriteUnlock(k, tid, records, lock_table, worker_chk, lock_table_mutex);
+            WriteUnlock(j, tid, records, lock_table, worker_chk, lock_table_mutex);
+            ReadUnlock(i, tid, records, lock_table, worker_chk, lock_table_mutex);
             break;
         }
         printf("*****Commit log : %d %d %d %d %ld %ld %ld\n", present_commit, i,j,k,records[i].val, records[j].val, records[k].val );
         fprintf(log_file, "%d %d %d %d %ld %ld %ld\n", present_commit, i,j,k,records[i].val, records[j].val, records[k].val );
 
         // Release write lock for records[k].
-        WriteUnlock(k, tid, records, lock_table, worker_chk);
-        printf("unlock k : %d\n",k);
+        WriteUnlock(k, tid, records, lock_table, worker_chk, lock_table_mutex);
         // Release write lock for records[j].
-        WriteUnlock(j, tid, records, lock_table, worker_chk);
-        printf("unlock j : %d\n",j);
+        WriteUnlock(j, tid, records, lock_table, worker_chk, lock_table_mutex);
         // Release read lock for records[i].
-        ReadUnlock(i, tid, records, lock_table, worker_chk);
-        printf("unlock i : %d\n",i);
+        ReadUnlock(i, tid, records, lock_table, worker_chk, lock_table_mutex);
 
 
     }
@@ -106,6 +104,8 @@ int main(int argc, char* argv[]){
     N = atoi(argv[1]);
     R = atoi(argv[2]);
     E = atoi(argv[3]);
+
+    lock_table_mutex = PTHREAD_MUTEX_INITIALIZER;
     
     pthread_t* threads;
     threads = (pthread_t *)malloc(sizeof(pthread_t) * N);
@@ -118,8 +118,11 @@ int main(int argc, char* argv[]){
         records[i].val = 100;
         records[i].read_active = 0;
         records[i].write_active = 0;
+        records[i].read_wait = 0;
+        records[i].write_wait = 0;
         records[i].read_cv = PTHREAD_COND_INITIALIZER;
         records[i].write_cv = PTHREAD_COND_INITIALIZER;
+        records[i].mutex = PTHREAD_MUTEX_INITIALIZER;
     }
 
     // Create threads to work.
@@ -135,6 +138,14 @@ int main(int argc, char* argv[]){
         pthread_join(threads[i], NULL);
     }
 
+    long records_sum = 0;
+    for(int i = 1;i<=R;i++){
+        printf("%ld ",records[i].val);
+        records_sum += records[i].val;
+    }
+
+    printf("\nSUM : %ld\n", records_sum);
     free(threads);
+    free(records);
     return 0;
 }

@@ -13,26 +13,32 @@ typedef struct Snapshot{
     Snapshot(int N){
         length = N;
         value = (int*)malloc(sizeof(int)*N);
-        stamp = (int*)malloc(sizeof(int*)N);
+        stamp = (int*)malloc(sizeof(int)*N);
     }
 
 }Snapshot;
+
 class WaitFreeSnapshot{
 public:
-    Snapshot snaps;
+    Snapshot* snaps;
     int snap_size;
 
-    WaitFreeSnapshot(int N){
+    WaitFreeSnapshot(){
+        snap_size = 0;
+    }
+
+    void init(int N){
         snap_size = N;
-        snaps = Snapshot(N);
+        snaps = new Snapshot(N);
     }
 
     void update(int value, int tid){
-        int* snaps = scan();
-        
+        Snapshot* snapshot = scan();
+        snaps->stamp[tid] = snapshot->stamp[tid]+1;
+        snaps->value[tid] = value;
     }
 
-    int* scan(){
+    Snapshot* scan(){
         Snapshot* old_snaps;
         Snapshot* new_snaps;
         vector<bool>moved(snap_size, false);
@@ -45,7 +51,7 @@ public:
             for(int i = 0; i < snap_size; i++){
                 if(old_snaps->stamp[i] != new_snaps->stamp[i]){
                     if(moved[i]){
-                        return old_snaps->value;
+                        return old_snaps;
                     }else{
                         is_moved = true;
                         moved[i] = true;
@@ -58,17 +64,19 @@ public:
                 break;
             }
         }
-        return new_snaps-> value;
+        return new_snaps;
     }
 
     // 
     Snapshot* collect(){
         Snapshot* res = new Snapshot(snap_size);
         for(int i = 0; i < snap_size; i++){
-            res[i] = snaps[i];
+            res->value[i] = snaps->value[i];
+            res->stamp[i] = snaps->stamp[i];
         }
         return res;
     }
 
-private:
-}
+};
+
+#endif

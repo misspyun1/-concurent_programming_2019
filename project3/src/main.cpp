@@ -8,13 +8,16 @@ using namespace std;
 int N;
 bool is_1min = false;
 int* update_cnt;
+vector<WaitFreeSnapshot> snapshot;
+
 void* ThreadFunc(int arg){
     long tid = (arg+1);
+    snapshot[tid].init(N);
 
     
     while(!is_1min){
         int rand_val = rand(); // get random value
-
+        snapshot[tid].update(rand_val, tid);
         update_cnt[tid]++;
     }
 
@@ -22,7 +25,7 @@ void* ThreadFunc(int arg){
 }
 
 int main(int argc, char* argv[]){
-    if (argc < 4) {
+    if (argc < 2) {
         printf("usage: ./run N\n");
         printf("N: Number of worker threads\n");
         return 0;
@@ -34,6 +37,7 @@ int main(int argc, char* argv[]){
     thread* threads;
     threads = (thread *)malloc(sizeof(thread) * N);
     update_cnt = (int *)malloc(sizeof(int) * (N+1));
+    snapshot = vector<WaitFreeSnapshot>(N+1);
 
     // Create threads to work.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
     for( long i = 0; i<(long)N; i++){

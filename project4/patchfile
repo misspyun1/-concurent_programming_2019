@@ -1,0 +1,93 @@
+diff --git storage/innobase/buf/buf0buf.cc storage/innobase/buf/buf0buf.cc
+index 41d242a9360..73707de1da9 100644
+--- storage/innobase/buf/buf0buf.cc
++++ storage/innobase/buf/buf0buf.cc
+@@ -69,6 +69,9 @@ Created 11/5/1995 Heikki Tuuri
+ 
+ #ifdef UNIV_LINUX
+ #include <stdlib.h>
++#include <thread>
++using namespace std;
++
+ #endif
+ 
+ #ifdef HAVE_LZO
+@@ -1495,7 +1498,6 @@ void buf_page_print(const byte* read_buf, ulint zip_size)
+ 
+ # ifdef PFS_GROUP_BUFFER_SYNC
+ extern mysql_pfs_key_t	buffer_block_mutex_key;
+-
+ /********************************************************************//**
+ This function registers mutexes and rwlocks in buffer blocks with
+ performance schema. If PFS_MAX_BUFFER_MUTEX_LOCK_REGISTER is
+@@ -1625,6 +1627,28 @@ buf_block_init(
+ 	ut_ad(rw_lock_validate(&(block->lock)));
+ }
+ 
++buf_block_t* block_index;
++ulint chunk_size;
++int chunk_size_idx;
++
++void init_block(int arg, buf_pool_t* buf_pool, byte* frame){
++	for (; chunk_size_idx<(int)chunk_size ; __sync_fetch_and_add(&chunk_size_idx, 1)) {
++
++		buf_block_init(buf_pool, block_index, frame);
++		UNIV_MEM_INVALID(block_index->frame, srv_page_size);
++
++		/* Add the block to the free list */
++		UT_LIST_ADD_LAST(buf_pool->free, &block_index->page);
++
++		ut_d(block_index->page.in_free_list = TRUE);
++		ut_ad(buf_pool_from_block(block_index) == buf_pool);
++
++		block_index++;
++		__sync_fetch_and_add(frame, srv_page_size);
++	}
++	
++}
++
+ /********************************************************************//**
+ Allocates a chunk of buffer frames.
+ @return chunk, or NULL on failure */
+@@ -1636,7 +1660,7 @@ buf_chunk_init(
+ 	buf_chunk_t*	chunk,		/*!< out: chunk of buffers */
+ 	ulint		mem_size)	/*!< in: requested size in bytes */
+ {
+-	buf_block_t*	block;
++	//buf_block_t*	block;
+ 	byte*		frame;
+ 	ulint		i;
+ 
+@@ -1699,21 +1723,21 @@ buf_chunk_init(
+ 	assign the frames to the first blocks (we already mapped the
+ 	memory above). */
+ 
+-	block = chunk->blocks;
++	block_index = chunk->blocks;
++	chunk_size = chunk->size;
++	chunk_size_idx = 0;
+ 
+-	for (i = chunk->size; i--; ) {
++	thread* threads;
++	ulint thr_num = sysconf(_SC_NPROCESSORS_ONLN);
+ 
+-		buf_block_init(buf_pool, block, frame);
+-		UNIV_MEM_INVALID(block->frame, srv_page_size);
++	threads = (thread *)malloc(sizeof(thread) * thr_num);
+ 
+-		/* Add the block to the free list */
+-		UT_LIST_ADD_LAST(buf_pool->free, &block->page);
+-
+-		ut_d(block->page.in_free_list = TRUE);
+-		ut_ad(buf_pool_from_block(block) == buf_pool);
++	for(i = 0; i < thr_num; i++){
++		threads[i] = thread(init_block, i, buf_pool, frame);
++	}
+ 
+-		block++;
+-		frame += srv_page_size;
++	for(i = 0; i < thr_num; i++){
++		threads[i].join();
+ 	}
+ 
+ 	buf_pool_register_chunk(chunk);
